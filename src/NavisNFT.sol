@@ -31,6 +31,8 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
 
     // Mapping from ship ID to ship abilities
     mapping(uint256 => string[]) public shipAbilities;
+    mapping (uint256=> uint256) public premiumShipID;
+    mapping (address=> uint256[]) public userToNFT;
 
     struct premiumShipData {
         uint256 id; 
@@ -85,12 +87,17 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
     }
 
     
-
+    //should include a check that the nft exists at all
+    // This is not gas efficient. How to make it gas efficient?
     // Function to update ship abilities
+    // Should not be able to update ship abilities for id 0 to 5 i.e free ships
     function updateShipAbilities(uint256 _id, string[] memory _abilities) public onlyRole(MINTER_ROLE) {
+            // Check if ship already exists
         if (shipAbilities[_id].length == 0) {
+            // If ship doesn't exist, add it to the mapping
             shipAbilities[_id] = _abilities;
         } else {
+            // If ship exists, update its abilities directly
             shipAbilities[_id] = _abilities;
         }
     }
@@ -102,29 +109,32 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
 
 
     //@notice This mints fungible tokens
-    function mintFree()
-        public
-    {
-        require(!userHasMinted[msg.sender], "User already minted free NFT");
-        userHasMinted[msg.sender] = true;
-        for (uint256 i = 0; i < 6; i++) 
-        {
-            _mint(msg.sender, i, 1, "");
+  //@notice This mints fungible tokens
+function mintFree() public {
+    require(!userHasMinted[msg.sender], "User already minted free NFT");
+    userHasMinted[msg.sender] = true;
+    for (uint256 i = 0; i < 6; i++) {
+        _mint(msg.sender, i, 1, "");
+        userToNFT[msg.sender].push(i); // Push the ID of the minted NFT to the user's NFT list
         _setURI(shipTypeURIs[i]); // Set the URI for the specific ship type
-        }        
-    }
+    }        
+}
 
-    //@notice This mints non-fungible tokens
-    function mintPremium(uint256 shipType)
-        public
-    {
-        require(navisToken.transferFrom(msg.sender, feeCollector, MINT_PRICE), "Fee transfer failed");
-        require(shipType > 5 && shipType <= 75, "Invalid ship type");
-        uint256 newTokenId = _tokenIdTracker.current() + PREMIUM_ID_OFFSET;
-        _mint(msg.sender, newTokenId, 1, "");
-        _setURI(shipTypeURIs[shipType]); 
-        _tokenIdTracker.increment(); 
-    }
+   
+//@notice This mints non-fungible tokens
+function mintPremium(uint256 shipType) public {
+    require(navisToken.transferFrom(msg.sender, feeCollector, MINT_PRICE), "Fee transfer failed");
+    require(shipType > 5 && shipType <= 75, "Invalid ship type");
+    uint256 newTokenId = _tokenIdTracker.current() + PREMIUM_ID_OFFSET;
+    _mint(msg.sender, newTokenId, 1, "");
+    userToNFT[msg.sender].push(newTokenId); // Push the ID of the minted NFT to the user's NFT list
+    _setURI(shipTypeURIs[shipType]); // Optionally, set URI specifically for this token type
+    _tokenIdTracker.increment(); // Increment the counter after minting
+}
+
+    function getUserShipIDs(address _user) public view returns (uint256[] memory) {
+    return userToNFT[_user];
+}
 
 
     function setShipTypeURI(uint256 shipType, string memory uri) public onlyRole(URI_SETTER_ROLE) {
