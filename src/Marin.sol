@@ -13,13 +13,13 @@ contract MARIN is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
     bytes32 public constant RESCUER_ROLE = keccak256("RESCUER_ROLE");
     uint256 public constant MAX_TOTAL_SUPPLY = 1000000000e18; // 1 billion total supply
 
-    constructor(address defaultAdmin, address pauser, address minter)
+    constructor()
         ERC20("MARIN", "MARIN")
         ERC20Permit("MARIN")
     {
-        _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
-        _grantRole(PAUSER_ROLE, pauser);
-        _grantRole(MINTER_ROLE, minter);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(PAUSER_ROLE, msg.sender);
+        _grantRole(MINTER_ROLE, msg.sender);
         _grantRole(RESCUER_ROLE, msg.sender);
     }
 
@@ -32,7 +32,7 @@ contract MARIN is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
     }
 
     function mint(address to, uint256 amount) public onlyRole(MINTER_ROLE) {
-        require(amount + totalSupply() <= MAX_TOTAL_SUPPLY, "NAVIX: Max total supply exceeded");
+        require(amount + totalSupply() <= MAX_TOTAL_SUPPLY, "MARIN: Max total supply exceeded");
         _mint(to, amount);
     }
 

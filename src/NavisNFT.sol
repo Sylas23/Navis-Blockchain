@@ -33,6 +33,7 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
     mapping(uint256 => string[]) public shipAbilities;
     mapping (uint256=> uint256) public premiumShipID;
     mapping (address=> uint256[]) public userToNFT;
+    mapping(uint256=>uint256) public premiumShipIDToType;
 
     struct premiumShipData {
         uint256 id; 
@@ -43,7 +44,7 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
     address public feeCollector; // Address that collects the token fees
     IERC20 public navisToken;
     
-    uint256 public constant MINT_PRICE = 200 * 10**18; // Assuming the ERC20 token has 18 decimals
+    uint256 public constant MINT_PRICE = 20 * 10**18; // Assuming the ERC20 token has 18 decimals
 
     // Mapping from ship type code to URI
     mapping(uint256 => string) public shipTypeURIs;
@@ -51,12 +52,12 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
 
 
 
-   constructor(address defaultAdmin, address pauser, address minter, address _feeCollector, address _navisTokenAddress) ERC1155("") {
-        _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
-        _grantRole(PAUSER_ROLE, pauser);
-        _grantRole(MINTER_ROLE, minter);
-        feeCollector = _feeCollector;
-        navisToken = IERC20(_navisTokenAddress); // Initialize the ERC20 token interface
+   constructor(address _navisTokenAddress) ERC1155("") {
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(PAUSER_ROLE, msg.sender);
+        _grantRole(MINTER_ROLE, msg.sender);
+        feeCollector = msg.sender;
+        navisToken = IERC20(_navisTokenAddress);
         name = "Navis NFT Ship";
         symbol = "NavisShip";
 
@@ -90,7 +91,6 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
     //should include a check that the nft exists at all
     // This is not gas efficient. How to make it gas efficient?
     // Function to update ship abilities
-    // Should not be able to update ship abilities for id 0 to 5 i.e free ships
     function updateShipAbilities(uint256 _id, string[] memory _abilities) public onlyRole(MINTER_ROLE) {
             // Check if ship already exists
         if (shipAbilities[_id].length == 0) {
@@ -122,14 +122,17 @@ function mintFree() public {
 
    
 //@notice This mints non-fungible tokens
-function mintPremium(uint256 shipType) public {
+function mintPremium(uint256 shipType) public returns (uint256) {
     require(navisToken.transferFrom(msg.sender, feeCollector, MINT_PRICE), "Fee transfer failed");
     require(shipType > 5 && shipType <= 75, "Invalid ship type");
     uint256 newTokenId = _tokenIdTracker.current() + PREMIUM_ID_OFFSET;
     _mint(msg.sender, newTokenId, 1, "");
     userToNFT[msg.sender].push(newTokenId); // Push the ID of the minted NFT to the user's NFT list
+    premiumShipIDToType[newTokenId] = shipType; // maps the id to the type of ship
     _setURI(shipTypeURIs[shipType]); // Optionally, set URI specifically for this token type
     _tokenIdTracker.increment(); // Increment the counter after minting
+
+    return  newTokenId;
 }
 
     function getUserShipIDs(address _user) public view returns (uint256[] memory) {

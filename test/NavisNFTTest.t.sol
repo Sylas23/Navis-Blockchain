@@ -17,13 +17,8 @@ contract NavisNFTTest is Test {
     function setUp() public {
         navixToken = new NavixToken();
         navisNFT = new NavisNFT(
-            deployer,
-            deployer,
-            deployer,
-            deployer,
             address(navixToken)
         );
-        // Minting tokens for each user to ensure they have enough to pay for premium NFT minting
         uint256 tokensToMint = 200000 ether;
         navixToken.mint(user, tokensToMint);
         navixToken.mint(user2, tokensToMint);
@@ -55,7 +50,7 @@ contract NavisNFTTest is Test {
 
         console.log("Total free nft minted:", totalNFTsMinted);
 
-        assert(totalNFTsMinted == TOTAL_FREE_NFT); // Assert the total number of NFTs minted matches the expected total
+        assert(totalNFTsMinted == TOTAL_FREE_NFT); 
     }
 
     function testPremiumNFTMintPayment() public {
@@ -86,63 +81,63 @@ contract NavisNFTTest is Test {
         assert(userNavixBalBefore - userNavixBalAfter == mintPrice);
     }
 
-    function testMultipleUserNFTIDDoesNotClash() public {
-        uint256[] memory shipTypes = new uint256[](5);
-        shipTypes[0] = 6;
-        shipTypes[1] = 7;
-        shipTypes[2] = 8;
-        shipTypes[3] = 9;
-        shipTypes[4] = 10;
-        uint256 mintPrice = 200 * 10 ** 18;
-        address[] memory users = new address[](4);
-        users[0] = user;
-        users[1] = user2;
-        users[2] = user3;
-        users[3] = user4;
+function testMultipleUserNFTIDDoesNotClash() public {
+    uint256[] memory shipTypes = new uint256[](5);
+    shipTypes[0] = 6;
+    shipTypes[1] = 7;
+    shipTypes[2] = 8;
+    shipTypes[3] = 9;
+    shipTypes[4] = 10;
+    uint256 mintPrice = 200 * 10 ** 18;
+    address[] memory users = new address[](4);
+    users[0] = user;
+    users[1] = user2;
+    users[2] = user3;
+    users[3] = user4;
 
-        // Create an array to track all premium NFT IDs minted in this test
-        uint256[] memory allPremiumNFTIDs = new uint256[](
-            shipTypes.length * users.length
+    uint256[] memory allPremiumNFTIDs = new uint256[](
+        shipTypes.length * users.length
+    );
+
+    uint256 index = 0; // Index for tracking NFT IDs in the array
+
+    for (uint256 i = 0; i < users.length; i++) {
+        vm.startPrank(users[i]);
+
+        // Ensure the user has enough tokens and approves the transaction
+        uint256 userBalanceBefore = navixToken.balanceOf(users[i]);
+        console.log("User balance before minting:", userBalanceBefore);
+        assert(userBalanceBefore >= mintPrice * shipTypes.length);
+        require(
+            navixToken.approve(
+                address(navisNFT),
+                mintPrice * shipTypes.length
+            ),
+            "Approval failed"
         );
 
-        uint256 index = 0; // Index for tracking NFT IDs in the array
+        // Mint multiple premium NFTs and check for ID clashes
+        for (uint256 j = 0; j < shipTypes.length; j++) {
+            uint256 newPremiumNFTID = navisNFT.mintPremium(shipTypes[j]);
+            console.log("User", uint256(uint160(users[i])));
+            console.log("User minted NFT ID", newPremiumNFTID);
+            console.log("of type for User", shipTypes[j]);
 
-        for (uint256 i = 0; i < users.length; i++) {
-            vm.startPrank(users[i]);
-
-            // Ensure the user has enough tokens and approves the transaction
-            assert(
-                navixToken.balanceOf(users[i]) >= mintPrice * shipTypes.length
-            );
-            require(
-                navixToken.approve(
-                    address(navisNFT),
-                    mintPrice * shipTypes.length
-                ),
-                "Approval failed"
-            );
-
-            // Mint free NFTs
-            navisNFT.mintFree();
-
-            // Mint multiple premium NFTs and check for ID clashes
-            for (uint256 j = 0; j < shipTypes.length; j++) {
-                navisNFT.mintPremium(shipTypes[j]);
-                uint256[] memory userNFTs = navisNFT.getUserShipIDs(users[i]);
-                uint256 newPremiumNFTID = userNFTs[j + 6]; // Assuming first 6 are always free NFT IDs
-
-                // Check if this new NFT ID has been minted before by any user
-                for (uint256 k = 0; k < index; k++) {
-                    assert(allPremiumNFTIDs[k] != newPremiumNFTID);
-                }
-
-                // Store the new NFT ID in the array
-                allPremiumNFTIDs[index] = newPremiumNFTID;
-                index++;
+            // Check if this new NFT ID has been minted before by any user
+            for (uint256 k = 0; k < index; k++) {
+                assert(allPremiumNFTIDs[k] != newPremiumNFTID);
             }
-            vm.stopPrank();
+
+            // Store the new NFT ID in the array
+            allPremiumNFTIDs[index] = newPremiumNFTID;
+            index++;
         }
+
+        uint256 userBalanceAfter = navixToken.balanceOf(users[i]);
+        console.log("User balance after minting:", userBalanceAfter);
+        vm.stopPrank();
     }
+}
 
     function testUpdateShipAbilitiesUnauthorized(uint256 _id, string[] memory _abilities) public {
     // Creating a temporary memory array to hold the new abilities
