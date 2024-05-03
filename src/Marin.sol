@@ -13,10 +13,7 @@ contract MARIN is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
     bytes32 public constant RESCUER_ROLE = keccak256("RESCUER_ROLE");
     uint256 public constant MAX_TOTAL_SUPPLY = 1000000000e18; // 1 billion total supply
 
-    constructor()
-        ERC20("MARIN", "MARIN")
-        ERC20Permit("MARIN")
-    {
+    constructor() ERC20("MARIN", "MARIN") ERC20Permit("MARIN") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
@@ -38,23 +35,16 @@ contract MARIN is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
 
     // The following functions are overrides required by Solidity.
 
-    function _update(address from, address to, uint256 value)
-        internal
-        override(ERC20, ERC20Pausable)
-    {
+    function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Pausable) {
         super._update(from, to, value);
     }
 
-    function rescueTokens(
-        IERC20 token,
-        uint256 value
-    ) external onlyRole(RESCUER_ROLE) {
+    function rescueTokens(IERC20 token, uint256 value) external onlyRole(RESCUER_ROLE) {
         token.transfer(msg.sender, value);
     }
 
     function rescueNative() public onlyRole(RESCUER_ROLE) {
-    address payable recipient = payable(msg.sender);
-    recipient.transfer(address(this).balance);
-}
-
+        address payable recipient = payable(msg.sender);
+        recipient.transfer(address(this).balance);
+    }
 }

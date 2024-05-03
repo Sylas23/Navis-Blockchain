@@ -8,15 +8,13 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 
-contract NavixToken  is ERC20, ERC20Pausable, AccessControl, ERC20Permit, ERC20Votes {
+contract NavixToken is ERC20, ERC20Pausable, AccessControl, ERC20Permit, ERC20Votes {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant RESCUER_ROLE = keccak256("RESCUER_ROLE");
     uint256 public constant MAX_TOTAL_SUPPLY = 1000000000e18; // 1 billion total supply
-    constructor()
-        ERC20("Navix", "Navix")
-        ERC20Permit("Navix")
-    {
+
+    constructor() ERC20("Navix", "Navix") ERC20Permit("Navix") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
@@ -51,26 +49,15 @@ contract NavixToken  is ERC20, ERC20Pausable, AccessControl, ERC20Permit, ERC20V
 
     // The following functions are overrides required by Solidity.
 
-    function _update(address from, address to, uint256 value)
-        internal
-        override(ERC20, ERC20Pausable, ERC20Votes)
-    {
+    function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Pausable, ERC20Votes) {
         super._update(from, to, value);
     }
 
-    function nonces(address owner)
-        public
-        view
-        override(ERC20Permit, Nonces)
-        returns (uint256)
-    {
+    function nonces(address owner) public view override(ERC20Permit, Nonces) returns (uint256) {
         return super.nonces(owner);
     }
 
-    function rescueTokens(
-        IERC20 token,
-        uint256 value
-    ) external onlyRole(RESCUER_ROLE) {
+    function rescueTokens(IERC20 token, uint256 value) external onlyRole(RESCUER_ROLE) {
         token.transfer(msg.sender, value);
     }
 }
