@@ -15,7 +15,7 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
 
     Counters.Counter public _tokenIdTracker;
     uint256 public constant PREMIUM_ID_OFFSET = 6; // Offsets premium ID from free ID to ensure Premium is non-fungible.
-
+    uint256 fee;
     //
     mapping(uint256 => string[]) nftAbilities;
 
@@ -43,7 +43,7 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
     address public feeCollector; // Address that collects the token fees
     IERC20 public navisToken;
 
-    uint256 public constant MINT_PRICE = 20 * 10 ** 18;
+    uint256 public mintFee = 20 * 10 ** 18;
 
     // Mapping from ship type code to URI
     mapping(uint256 => string) public shipTypeURIs;
@@ -98,6 +98,10 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
         );
     }
 
+    function setMintFee( uint256 _MintFee) public { 
+        mintFee = _MintFee;
+    }
+
     function getPremiumShipAbilities(uint256 _id) public view returns (string[] memory) {
         return shipAbilities[_id];
     }
@@ -115,7 +119,7 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
 
     //@notice This mints non-fungible tokens
     function mintPremium(uint256 shipType) public returns (uint256) {
-        require(navisToken.transferFrom(msg.sender, feeCollector, MINT_PRICE), "Fee transfer failed");
+        require(navisToken.transferFrom(msg.sender, feeCollector, mintFee), "Fee transfer failed");
         require(shipType > 5 && shipType <= 75, "Invalid ship type");
         uint256 newTokenId = _tokenIdTracker.current() + PREMIUM_ID_OFFSET;
         _mint(msg.sender, newTokenId, 1, "");

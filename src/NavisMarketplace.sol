@@ -13,6 +13,7 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
 contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
     IERC1155 public immutable nftContract;
     IERC20 public immutable navisToken;
+    uint256 fee;
 
     struct Listing {
         uint256 tokenId;
@@ -40,33 +41,57 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
     uint256[] public activeTokenIds;
 
     event Listed(uint256 indexed tokenId, uint256 price, address seller);
-    event Sale(uint256 indexed tokenId, uint256 price, address seller, address buyer);
+    event Sale(
+        uint256 indexed tokenId,
+        uint256 price,
+        address seller,
+        address buyer
+    );
     event Unlisted(uint256 indexed tokenId);
     event PriceUpdated(uint256 indexed tokenId, uint256 newPrice);
     event BidPlaced(uint256 indexed tokenId, address bidder, uint256 bid);
     event AuctionExtended(uint256 indexed tokenId, uint256 newEndTime);
 
     constructor(address _nftContract, address _navisToken) Ownable(msg.sender) {
-        require(_nftContract != address(0), "NFT contract address cannot be zero.");
-        require(_navisToken != address(0), "Navis token address cannot be zero.");
+        require(
+            _nftContract != address(0),
+            "NFT contract address cannot be zero."
+        );
+        require(
+            _navisToken != address(0),
+            "Navis token address cannot be zero."
+        );
         nftContract = IERC1155(_nftContract);
         navisToken = IERC20(_navisToken);
     }
 
-    function listToken(uint256 tokenId, uint256 price, bool isAuction, uint64 auctionDuration) public nonReentrant {
-        require(nftContract.balanceOf(msg.sender, tokenId) > 0, "Seller must own the token.");
+    function listToken(
+        uint256 tokenId,
+        uint256 price,
+        bool isAuction,
+        uint64 auctionDuration
+    ) public nonReentrant {
+        require(
+            nftContract.balanceOf(msg.sender, tokenId) > 0,
+            "Seller must own the token."
+        );
         require(
             nftContract.isApprovedForAll(msg.sender, address(this)),
             "Contract must be approved to manage seller's tokens."
         );
-        require(listings[tokenId].tokenId == 0, "Token is already listed or auctioned.");
+        require(
+            listings[tokenId].tokenId == 0,
+            "Token is already listed or auctioned."
+        );
 
         listings[tokenId] = Listing({
             tokenId: tokenId,
             price: price,
             seller: msg.sender,
             isAuction: isAuction,
-            auctionEndTime: isAuction ? uint64(block.timestamp) + auctionDuration : 0,
+            auctionEndTime: isAuction
+                ? uint64(block.timestamp) + auctionDuration
+                : 0,
             highestBidder: address(0),
             highestBid: 0
         });
@@ -87,7 +112,9 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
     }
 
     // Batch unlist tokens
-    function batchUnlistTokens(uint256[] memory tokenIds) public isNotBlacklisted {
+    function batchUnlistTokens(
+        uint256[] memory tokenIds
+    ) public isNotBlacklisted {
         for (uint256 i = 0; i < tokenIds.length; i++) {
             unlistToken(tokenIds[i]);
         }
@@ -99,8 +126,18 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         require(listing.isAuction == false, "Token currently on auction");
 
         require(listingPaused[tokenId] == false, "Listing currently paused");
-        require(navisToken.transferFrom(msg.sender, listing.seller, listing.price), "Payment transfer failed.");
-        nftContract.safeTransferFrom(listing.seller, msg.sender, tokenId, 1, "");
+        uint256 totalPrice = listing.price + fee;
+        require(
+            navisToken.transferFrom(msg.sender, listing.seller, totalPrice),
+            "Payment transfer failed."
+        );
+        nftContract.safeTransferFrom(
+            listing.seller,
+            msg.sender,
+            tokenId,
+            1,
+            ""
+        );
         emit Sale(tokenId, listing.price, listing.seller, msg.sender);
         delete listings[tokenId];
 
@@ -108,22 +145,32 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
     }
 
     function unlistToken(uint256 tokenId) public nonReentrant {
-        require(listings[tokenId].seller == msg.sender, "Only seller can unlist the token.");
+        require(
+            listings[tokenId].seller == msg.sender,
+            "Only seller can unlist the token."
+        );
         emit Unlisted(tokenId);
         removeTokenId(tokenId); // Implement this to remove token ID from activeTokenIds
         delete listings[tokenId];
     }
 
-    function getListingData(uint256 _tokenId) public view returns (Listing memory) {
+    function getListingData(
+        uint256 _tokenId
+    ) public view returns (Listing memory) {
         return listings[_tokenId];
     }
 
-    function queryListings(uint256 minPrice, uint256 maxPrice, bool isAuction) public view returns (Listing[] memory) {
+    function queryListings(
+        uint256 minPrice,
+        uint256 maxPrice,
+        bool isAuction
+    ) public view returns (Listing[] memory) {
         uint256 count = 0;
         for (uint256 i = 0; i < activeTokenIds.length; i++) {
             if (
-                (listings[activeTokenIds[i]].price >= minPrice) && (listings[activeTokenIds[i]].price <= maxPrice)
-                    && listings[activeTokenIds[i]].isAuction == isAuction
+                (listings[activeTokenIds[i]].price >= minPrice) &&
+                (listings[activeTokenIds[i]].price <= maxPrice) &&
+                listings[activeTokenIds[i]].isAuction == isAuction
             ) {
                 count++;
             }
@@ -133,8 +180,9 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         uint256 index = 0;
         for (uint256 i = 0; i < activeTokenIds.length; i++) {
             if (
-                (listings[activeTokenIds[i]].price >= minPrice) && (listings[activeTokenIds[i]].price <= maxPrice)
-                    && listings[activeTokenIds[i]].isAuction == isAuction
+                (listings[activeTokenIds[i]].price >= minPrice) &&
+                (listings[activeTokenIds[i]].price <= maxPrice) &&
+                listings[activeTokenIds[i]].isAuction == isAuction
             ) {
                 filteredListings[index] = listings[activeTokenIds[i]];
                 index++;
@@ -174,24 +222,37 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         revert("Token ID not found in the active list");
     }
 
-    function placeBid(uint256 tokenId, uint256 bidAmount) public nonReentrant isNotBlacklisted {
+    function placeBid(
+        uint256 tokenId,
+        uint256 bidAmount
+    ) public nonReentrant isNotBlacklisted {
         Listing storage listing = listings[tokenId];
         require(listingPaused[tokenId] == false, "Listing currently paused");
         require(listing.isAuction, "This token is not up for auction.");
-        require(block.timestamp < listing.auctionEndTime, "The auction has ended.");
+        require(
+            block.timestamp < listing.auctionEndTime,
+            "The auction has ended."
+        );
 
-        uint256 minRequiredBid = listing.highestBid + ((listing.highestBid * minBidPercentageIncrement) / 100);
+        uint256 minRequiredBid = listing.highestBid +
+            ((listing.highestBid * minBidPercentageIncrement) / 100);
         require(
             bidAmount >= minRequiredBid,
             "Bid must be at least the minimum percentage increment higher than the current highest bid."
         );
 
+        uint256 totalbid = bidAmount + fee;
+
         // Transfer the bid amount in navisToken from the bidder to this contract
-        require(navisToken.transferFrom(msg.sender, address(this), bidAmount), "Failed to transfer tokens for bid");
+        require(
+            navisToken.transferFrom(msg.sender, address(this), totalbid),
+            "Failed to transfer tokens for bid"
+        );
 
         if (listing.highestBidder != address(0)) {
             require(
-                navisToken.transfer(listing.highestBidder, listing.highestBid), "Failed to refund the previous bidder"
+                navisToken.transfer(listing.highestBidder, listing.highestBid),
+                "Failed to refund the previous bidder"
             );
         }
 
@@ -207,9 +268,19 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         emit BidPlaced(tokenId, msg.sender, bidAmount);
     }
 
-    function updateHistory(uint256 tokenId, address seller, address buyer, uint256 price) internal {
+    function updateHistory(
+        uint256 tokenId,
+        address seller,
+        address buyer,
+        uint256 price
+    ) internal {
         tokenHistories[tokenId].push(
-            HistoryEntry({price: price, seller: seller, buyer: buyer, timestamp: uint64(block.timestamp)})
+            HistoryEntry({
+                price: price,
+                seller: seller,
+                buyer: buyer,
+                timestamp: uint64(block.timestamp)
+            })
         );
     }
 
@@ -222,16 +293,41 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
     function concludeAuction(uint256 tokenId) public nonReentrant {
         Listing storage listing = listings[tokenId];
         require(listing.isAuction, "This token is not auctioned.");
-        require(block.timestamp >= listing.auctionEndTime, "The auction is not yet over.");
-        require(msg.sender == listing.seller || msg.sender == owner(), "Only seller or owner can conclude the auction.");
+        require(
+            block.timestamp >= listing.auctionEndTime,
+            "The auction is not yet over."
+        );
+        require(
+            msg.sender == listing.seller || msg.sender == owner(),
+            "Only seller or owner can conclude the auction."
+        );
 
         if (listing.highestBidder != address(0)) {
-            nftContract.safeTransferFrom(listing.seller, listing.highestBidder, tokenId, 1, "");
-            require(navisToken.transfer(listing.seller, listing.highestBid), "Failed to transfer funds to seller");
+            nftContract.safeTransferFrom(
+                listing.seller,
+                listing.highestBidder,
+                tokenId,
+                1,
+                ""
+            );
+            require(
+                navisToken.transfer(listing.seller, listing.highestBid),
+                "Failed to transfer funds to seller"
+            );
 
-            emit Sale(tokenId, listing.highestBid, listing.seller, listing.highestBidder);
+            emit Sale(
+                tokenId,
+                listing.highestBid,
+                listing.seller,
+                listing.highestBidder
+            );
 
-            updateHistory(tokenId, listing.seller, listing.highestBidder, listing.highestBid);
+            updateHistory(
+                tokenId,
+                listing.seller,
+                listing.highestBidder,
+                listing.highestBid
+            );
         } else {
             // case where there were no bids
         }
@@ -241,12 +337,18 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
     }
 
     function pauseListing(uint256 tokenId) public {
-        require(listings[tokenId].seller == msg.sender || owner() == msg.sender, "Not authorized");
+        require(
+            listings[tokenId].seller == msg.sender || owner() == msg.sender,
+            "Not authorized"
+        );
         listingPaused[tokenId] = true;
     }
 
     function unpauseListing(uint256 tokenId) public {
-        require(listings[tokenId].seller == msg.sender || owner() == msg.sender, "Not authorized");
+        require(
+            listings[tokenId].seller == msg.sender || owner() == msg.sender,
+            "Not authorized"
+        );
         listingPaused[tokenId] = false;
     }
 
@@ -254,17 +356,33 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         require(newPrice > 0, "Price must be greater than zero.");
         require(listingPaused[tokenId] == false, "Listing currently paused");
 
-        require(listings[tokenId].seller == msg.sender, "Only seller can update the listing.");
+        require(
+            listings[tokenId].seller == msg.sender,
+            "Only seller can update the listing."
+        );
         listings[tokenId].price = newPrice;
         emit PriceUpdated(tokenId, newPrice);
     }
 
-    function rescueERC20(address tokenAddress, uint256 amount) public onlyOwner {
+    function rescueERC20(
+        address tokenAddress,
+        uint256 amount
+    ) public onlyOwner {
         IERC20(tokenAddress).transfer(owner(), amount);
     }
 
-    function rescueERC1155(address tokenAddress, uint256 tokenId, uint256 amount) public onlyOwner {
-        IERC1155(tokenAddress).safeTransferFrom(address(this), owner(), tokenId, amount, "");
+    function rescueERC1155(
+        address tokenAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) public onlyOwner {
+        IERC1155(tokenAddress).safeTransferFrom(
+            address(this),
+            owner(),
+            tokenId,
+            amount,
+            ""
+        );
     }
 
     function blacklistUser(address user) public onlyOwner {
@@ -280,21 +398,23 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         _;
     }
 
-    function onERC1155Received(address, address, uint256, uint256, bytes memory)
-        public
-        pure
-        override
-        returns (bytes4)
-    {
+    function onERC1155Received(
+        address,
+        address,
+        uint256,
+        uint256,
+        bytes memory
+    ) public pure override returns (bytes4) {
         return this.onERC1155Received.selector;
     }
 
-    function onERC1155BatchReceived(address, address, uint256[] memory, uint256[] memory, bytes memory)
-        public
-        pure
-        override
-        returns (bytes4)
-    {
+    function onERC1155BatchReceived(
+        address,
+        address,
+        uint256[] memory,
+        uint256[] memory,
+        bytes memory
+    ) public pure override returns (bytes4) {
         return this.onERC1155BatchReceived.selector;
     }
 }
