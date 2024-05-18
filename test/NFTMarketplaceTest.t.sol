@@ -94,7 +94,7 @@ contract NFTMarketplaceTest is Test {
 
         uint256 price = 300 ether;
         bool isAuction = false;
-        uint256 auctionDuration = 1714603946;
+        uint64 auctionDuration = 1714603946;
 
         navisNFT.setApprovalForAll(address(navisMarketplace), true);
 
@@ -116,7 +116,7 @@ contract NFTMarketplaceTest is Test {
 
         uint256 price = 300 ether;
         bool isAuction = false;
-        uint256 auctionDuration = 1714603946;
+        uint64 auctionDuration = 1714603946;
 
         navisNFT.setApprovalForAll(address(navisMarketplace), true);
         navisMarketplace.listToken(newTokenID, price, isAuction, auctionDuration);
@@ -173,7 +173,7 @@ contract NFTMarketplaceTest is Test {
 
         uint256 price = 300 ether;
         bool isAuction = true;
-        uint256 auctionDuration = 1714603946;
+        uint64 auctionDuration = 1714603946;
 
         navisNFT.setApprovalForAll(address(navisMarketplace), true);
 
@@ -222,7 +222,7 @@ contract NFTMarketplaceTest is Test {
 
         uint256 price = 300 ether;
         bool isAuction = true;
-        uint256 auctionDuration = block.timestamp + 1 days;
+        uint64 auctionDuration = uint64(block.timestamp) + 1 days;
 
         navisNFT.setApprovalForAll(address(navisMarketplace), true);
 
@@ -309,7 +309,7 @@ contract NFTMarketplaceTest is Test {
 
         uint256 price = 300 ether;
         bool isAuction = true;
-        uint256 auctionDuration = block.timestamp + 1 days;
+        uint64 auctionDuration = uint64(block.timestamp) + 1 days;
 
         navisNFT.setApprovalForAll(address(navisMarketplace), true);
         vm.expectEmit(true, false, false, false);
@@ -341,7 +341,7 @@ contract NFTMarketplaceTest is Test {
 
         uint256 price = 300 ether;
         bool isAuction = true;
-        uint256 auctionDuration = block.timestamp + 1 days;
+        uint64 auctionDuration = uint64(block.timestamp) + 1 days;
 
         navisNFT.setApprovalForAll(address(navisMarketplace), true);
         vm.expectEmit(true, false, false, false);
@@ -382,7 +382,7 @@ contract NFTMarketplaceTest is Test {
 
         uint256 price = 300 ether;
         bool isAuction = true;
-        uint256 auctionDuration = block.timestamp + 1 days;
+        uint64 auctionDuration = uint64(block.timestamp) + 1 days;
 
         navisNFT.setApprovalForAll(address(navisMarketplace), true);
         vm.expectEmit(true, false, false, false);

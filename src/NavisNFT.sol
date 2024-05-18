@@ -58,11 +58,11 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
         symbol = "NavisShip";
 
         // Initialize URIs for each ship type, assuming 75 types
-        for (uint256 i = 1; i <= 75; i++) {
-            shipTypeURIs[i] = string(
-                abi.encodePacked("https://gnfd-testnet-sp1.bnbchain.org/view/navis-nft-test/", uint2str(i), ".json")
-            );
-        }
+        // for (uint256 i = 1; i <= 75; i++) {
+        //     shipTypeURIs[i] = string(
+        //         abi.encodePacked("https://gnfd-testnet-sp1.bnbchain.org/view/navis-nft-test/", uint2str(i), ".json")
+        //     );
+        // }
     }
 
     function setURI(string memory newuri) public onlyRole(URI_SETTER_ROLE) {
@@ -89,6 +89,13 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
         } else {
             shipAbilities[_id] = _abilities;
         }
+    }
+
+    function uri(uint256 tokenId) public view override returns (string memory) {
+        uint256 shipType = tokenId < PREMIUM_ID_OFFSET ? tokenId : premiumShipIDToType[tokenId];
+        return string(
+            abi.encodePacked("https://gnfd-testnet-sp1.bnbchain.org/view/navis-nft-test/", uint2str(shipType), ".json")
+        );
     }
 
     function getPremiumShipAbilities(uint256 _id) public view returns (string[] memory) {

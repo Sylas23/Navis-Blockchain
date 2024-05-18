@@ -19,7 +19,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         uint256 price;
         address seller;
         bool isAuction;
-        uint256 auctionEndTime;
+        uint64 auctionEndTime;
         address highestBidder;
         uint256 highestBid;
     }
@@ -28,14 +28,14 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         uint256 price;
         address seller;
         address buyer;
-        uint256 timestamp;
+        uint64 timestamp;
     }
 
     mapping(uint256 => Listing) public listings;
     mapping(uint256 => HistoryEntry[]) public tokenHistories;
     mapping(uint256 => bool) public listingPaused;
     mapping(address => bool) public blacklisted;
-    uint256 public constant MIN_EXTENSION_TIME = 2 minutes;
+    uint64 public constant MIN_EXTENSION_TIME = 2 minutes;
     uint256 public minBidPercentageIncrement = 5; // 5% minimum increment
     uint256[] public activeTokenIds;
 
@@ -53,7 +53,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         navisToken = IERC20(_navisToken);
     }
 
-    function listToken(uint256 tokenId, uint256 price, bool isAuction, uint256 auctionDuration) public nonReentrant {
+    function listToken(uint256 tokenId, uint256 price, bool isAuction, uint64 auctionDuration) public nonReentrant {
         require(nftContract.balanceOf(msg.sender, tokenId) > 0, "Seller must own the token.");
         require(
             nftContract.isApprovedForAll(msg.sender, address(this)),
@@ -66,7 +66,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
             price: price,
             seller: msg.sender,
             isAuction: isAuction,
-            auctionEndTime: isAuction ? block.timestamp + auctionDuration : 0,
+            auctionEndTime: isAuction ? uint64(block.timestamp) + auctionDuration : 0,
             highestBidder: address(0),
             highestBid: 0
         });
@@ -79,7 +79,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         uint256[] memory tokenIds,
         uint256[] memory prices,
         bool[] memory isAuctions,
-        uint256[] memory durations
+        uint64[] memory durations
     ) public isNotBlacklisted nonReentrant {
         for (uint256 i = 0; i < tokenIds.length; i++) {
             listToken(tokenIds[i], prices[i], isAuctions[i], durations[i]);
@@ -209,7 +209,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
 
     function updateHistory(uint256 tokenId, address seller, address buyer, uint256 price) internal {
         tokenHistories[tokenId].push(
-            HistoryEntry({price: price, seller: seller, buyer: buyer, timestamp: block.timestamp})
+            HistoryEntry({price: price, seller: seller, buyer: buyer, timestamp: uint64(block.timestamp)})
         );
     }
 
