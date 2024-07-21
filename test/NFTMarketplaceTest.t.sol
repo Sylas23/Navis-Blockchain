@@ -7,26 +7,11 @@ import {NavixToken} from "../src/NavixToken.sol";
 import {NavisMarketplace} from "../src/NavisMarketplace.sol";
 
 event Listed(uint256 indexed tokenId, uint256 price, address seller);
-
 event Sale(uint256 indexed tokenId, uint256 price, address seller, address buyer);
-
 event Unlisted(uint256 indexed tokenId);
-
 event PriceUpdated(uint256 indexed tokenId, uint256 newPrice);
-
 event BidPlaced(uint256 indexed tokenId, address bidder, uint256 bid);
-
 event AuctionExtended(uint256 indexed tokenId, uint256 newEndTime);
-
-struct Listing {
-    uint256 tokenId;
-    uint256 price;
-    address seller;
-    bool isAuction;
-    uint256 auctionEndTime;
-    address highestBidder;
-    uint256 highestBid;
-}
 
 contract NFTMarketplaceTest is Test {
     NavisNFT public navisNFT;
@@ -38,369 +23,174 @@ contract NFTMarketplaceTest is Test {
     address user3 = address(4);
     address user4 = address(5);
 
-    uint256 mintPrice = 200 * 10 ** 18;
+    uint256 constant mintPrice = 200 * 10 ** 18;
+    uint256 constant tokensToMint = 200000 ether;
 
     function setUp() public {
         navixToken = new NavixToken();
         navisNFT = new NavisNFT(address(navixToken));
         navisMarketplace = new NavisMarketplace(address(navisNFT), address(navixToken));
-        // Minting tokens for each user to ensure they have enough to pay for premium NFT minting
-        uint256 tokensToMint = 200000 ether;
 
-        navixToken.mint(deployer, tokensToMint);
-        navixToken.mint(user, tokensToMint);
-        navixToken.mint(user2, tokensToMint);
-        navixToken.mint(user3, tokensToMint);
-        navixToken.mint(user4, tokensToMint);
+        // Mint tokens for each user
+        address[] memory users = new address[](5);
+        users[0] = deployer;
+        users[1] = user;
+        users[2] = user2;
+        users[3] = user3;
+        users[4] = user4;
+
+        for (uint256 i = 0; i < users.length; i++) {
+            navixToken.mint(users[i], tokensToMint);
+        }
     }
 
     function testMintPremium() public {
         uint256 shipType = 8;
-        uint256 mintPrice = 200 * 10 ** 18;
-
         uint256 userNavixBalBefore = navixToken.balanceOf(user);
         console.log("User Navix Balance Before Mint:", userNavixBalBefore);
 
         vm.startPrank(user);
-
         require(navixToken.approve(address(navisNFT), mintPrice), "Approval failed");
-
-        uint256 newTokeID = navisNFT.mintPremium(shipType);
-        console.log("New Token ID is:", newTokeID);
-        console.log("Shiptype is:", shipType);
-
+        uint256 newTokenID = navisNFT.mintPremium(shipType);
         vm.stopPrank();
-
-        uint256 balanceOfUserPremiumNFT = navisNFT.balanceOf(user, shipType);
-        console.log("Balance of Premium NFT:", balanceOfUserPremiumNFT);
 
         uint256 userNavixBalAfter = navixToken.balanceOf(user);
         console.log("User Navix Balance After Mint:", userNavixBalAfter);
 
-        //q: why is this failing?
-        //assert(userNavixBalBefore - userNavixBalAfter == mintPrice);
-
-        assert(newTokeID > 5);
+        assertEq(userNavixBalBefore - userNavixBalAfter, mintPrice, "Mint price was not deducted correctly");
+        assert(newTokenID > 5);
     }
 
     function testListForSale() public {
-        uint256 shipType = 8;
-        uint256 mintPrice = 100 ether;
-
-        vm.startPrank(user);
-        require(navixToken.approve(address(navisNFT), mintPrice), "Approval failed");
-        uint256 newTokenID = navisNFT.mintPremium(shipType);
-        console.log("New Token ID is:", newTokenID);
-
-        uint256 price = 300 ether;
-        bool isAuction = false;
-        uint64 auctionDuration = 1714603946;
-
-        navisNFT.setApprovalForAll(address(navisMarketplace), true);
+        uint256 newTokenID = mintAndListToken(user, 8, 300 ether, false, 1714603946);
 
         // Expect the Listed event to be emitted with specific parameters
         vm.expectEmit(true, false, false, false);
-        emit Listed(newTokenID, price, user); //  event signature
-        navisMarketplace.listToken(newTokenID, price, isAuction, auctionDuration);
-        vm.stopPrank();
+        emit Listed(newTokenID, 300 ether, user);
     }
 
     function testBuyTokenOnSale_NotAuction() public {
-        uint256 shipType = 8;
-        uint256 mintPrice = 100 ether;
-
-        // User minting premium NFT
-        vm.startPrank(user);
-        require(navixToken.approve(address(navisNFT), mintPrice), "Approval failed");
-        uint256 newTokenID = navisNFT.mintPremium(shipType);
-        console.log("New Token ID is:", newTokenID);
-
-// Listing Details
-        uint256 price = 300 ether;
-        bool isAuction = false;
-        uint64 auctionDuration = uint64(block.timestamp) + 100000;
-
-        navisNFT.setApprovalForAll(address(navisMarketplace), true);
-        navisMarketplace.listToken(newTokenID, price, isAuction, auctionDuration);
-        vm.stopPrank();
-
-        // Getting listings
-
-        NavisMarketplace.Listing[] memory listingArray = navisMarketplace.queryListings(200 ether, 400 ether, false);
-
-        for (uint256 i = 0; i < listingArray.length; i++) {
-            NavisMarketplace.Listing memory listing = listingArray[i];
-            console.log("Token ID:", listing.tokenId);
-            console.log("Price:", listing.price);
-            console.log("Seller:", listing.seller);
-        }
+        uint256 newTokenID = mintAndListToken(user, 8, 300 ether, false, uint64(block.timestamp) + 100000);
+        uint256 user2NavixBalBefore = navixToken.balanceOf(user2);
 
         // Simulate user2 buying the listed token
         vm.startPrank(user2);
-        uint256 user2NavixBalBefore = navixToken.balanceOf(user2);
-        console.log('user2NavixBalBefore', user2NavixBalBefore);
-        require(navixToken.approve(address(navisMarketplace), price), "Approval failed");
+        require(navixToken.approve(address(navisMarketplace), 300 ether), "Approval failed");
 
         // Expecting the Sale event to be emitted
         vm.expectEmit(true, false, false, true);
-        emit Sale(newTokenID, price, user, user2);
+        emit Sale(newTokenID, 300 ether, user, user2);
 
         navisMarketplace.buyToken(newTokenID);
-
-        uint256 user2NFTBalance = navisNFT.balanceOf(address(user2), newTokenID);
-
-        // uint256 user2NavixBalAfter = navixToken.balanceOf(user2);
-        // assertEq(
-        //     user2NFTBalance, 0,
-        //     "User NFT Balance should increase"
-        // );
-
-        // Verify the ownership of the NFT has transferred
-        assertEq(navisNFT.balanceOf(user2, newTokenID), 1, "User2 should now own the NFT");
         vm.stopPrank();
 
-        uint256 userNavixBalAfterSale = navixToken.balanceOf(user);
-        console.log("Seller Balance after sale:", userNavixBalAfterSale);
+        assertEq(navisNFT.balanceOf(user2, newTokenID), 1, "User2 should now own the NFT");
+        console.log("Seller Balance after sale:", navixToken.balanceOf(user));
     }
 
-    //Attempting to call buyToken when token is on auction should failed
     function testBuyTokenOnAuction() public {
-        uint256 shipType = 8;
-        uint256 mintPrice = 100 ether;
-
-        vm.startPrank(user);
-
-        require(navixToken.approve(address(navisNFT), mintPrice), "Approval failed");
-
-        uint256 newTokenID = navisNFT.mintPremium(shipType);
-        console.log("New Token ID is:", newTokenID);
-
-        uint256 price = 300 ether;
-        bool isAuction = true;
-        uint64 auctionDuration = 1714603946;
-
-        navisNFT.setApprovalForAll(address(navisMarketplace), true);
-
-        vm.expectEmit(true, false, false, false);
-        emit Listed(newTokenID, price, user);
-        navisMarketplace.listToken(newTokenID, price, isAuction, auctionDuration);
-
-        vm.stopPrank();
-
-        // returns the array of Listings returned by queryListings
-        NavisMarketplace.Listing[] memory listingArray = navisMarketplace.queryListings(200 ether, 400 ether, false);
-
-        for (uint256 i = 0; i < listingArray.length; i++) {
-            NavisMarketplace.Listing memory listing = listingArray[i];
-            console.log("Token ID:", listing.tokenId);
-            console.log("Price:", listing.price);
-            console.log("Seller:", listing.seller);
-        }
+        uint256 newTokenID = mintAndListToken(user, 8, 300 ether, true, 1714603946);
 
         // user2 calling "buy" instead of "bid" on the auctioned token
         vm.startPrank(user2);
-        uint256 user2NavixBalBefore = navixToken.balanceOf(user2);
-        require(navixToken.approve(address(navisMarketplace), price), "Approval failed");
+        require(navixToken.approve(address(navisMarketplace), 300 ether), "Approval failed");
 
-        //Confirm Revert
+        // Confirm Revert
         vm.expectRevert(bytes("Token currently on auction"));
         navisMarketplace.buyToken(newTokenID);
-        //Confirm buyer doesn't get nft
-        assertEq(navisNFT.balanceOf(user2, newTokenID), 0, "User2 should not own the NFT");
-        //Confirm user still owns nft
-        assertEq(navisNFT.balanceOf(user, newTokenID), 1, "User should still own the NFT");
         vm.stopPrank();
+
+        // Confirm buyer doesn't get NFT
+        assertEq(navisNFT.balanceOf(user2, newTokenID), 0, "User2 should not own the NFT");
+        assertEq(navisNFT.balanceOf(user, newTokenID), 1, "User should still own the NFT");
     }
 
-    //Will take multiple bids, only the final highest bid should be accepted.
     function testBidForTokenOnAuction() public {
-        uint256 shipType = 8;
-        uint256 mintPrice = 100 ether;
+        uint256 newTokenID = mintAndListToken(user, 8, 300 ether, true, uint64(block.timestamp) + 1 days);
 
-        vm.startPrank(user);
-
-        require(navixToken.approve(address(navisNFT), mintPrice), "Approval failed");
-
-        uint256 newTokenID = navisNFT.mintPremium(shipType);
-        console.log("New Token ID is:", newTokenID);
-
-        uint256 price = 300 ether;
-        bool isAuction = true;
-        uint64 auctionDuration = uint64(block.timestamp) + 1 days;
-
-        navisNFT.setApprovalForAll(address(navisMarketplace), true);
-
-        vm.expectEmit(true, false, false, false);
-        emit Listed(newTokenID, price, user);
-        navisMarketplace.listToken(newTokenID, price, isAuction, auctionDuration);
-
-        vm.stopPrank();
-
-        NavisMarketplace.Listing[] memory listingArray = navisMarketplace.queryListings(200 ether, 400 ether, false);
-
-        for (uint256 i = 0; i < listingArray.length; i++) {
-            NavisMarketplace.Listing memory listing = listingArray[i];
-            console.log("Token ID:", listing.tokenId);
-            console.log("Price:", listing.price);
-            console.log("Seller:", listing.seller);
-        }
-
-        // Simulate user2 bidding for the listed token
-        vm.startPrank(user2);
-        uint256 user2NavixBalBefore = navixToken.balanceOf(user2);
-        require(navixToken.approve(address(navisMarketplace), price + 50 ether), "Approval failed");
-
-        // Expecting the Sale event to be emitted
-        //vm.expectEmit(true, false, false, true);
-        //emit Sale(newTokenID, price, user, user2); // Mimicking the Sale event
-
-        navisMarketplace.placeBid(newTokenID, price + 50 ether);
-
-        uint256 user2NavixBalAfter = navixToken.balanceOf(user2);
-        console.log("user2NavixBalAfter:", user2NavixBalAfter);
-        vm.stopPrank();
-
-        // Simulate user3 bidding for the listed token
-        vm.startPrank(user3);
-        uint256 user3NavixBalBefore = navixToken.balanceOf(user3);
-        require(navixToken.approve(address(navisMarketplace), price + 100 ether), "Approval failed");
-
-        navisMarketplace.placeBid(newTokenID, price + 100 ether);
-
-        uint256 user3NavixBalAfter = navixToken.balanceOf(user3);
-        console.log("user3NavixBalAfter:", user3NavixBalAfter);
-        vm.stopPrank();
-
-        NavisMarketplace.Listing memory listingData = navisMarketplace.getListingData(newTokenID);
-        // Log the details of the listing
-        console.log("Token ID:", listingData.tokenId);
-        console.log("Current Price:", listingData.price);
-        console.log("Seller:", listingData.seller);
-        console.log("Is Auction:", listingData.isAuction);
-        console.log("Auction End Time:", listingData.auctionEndTime);
-        console.log("Highest Bidder:", listingData.highestBidder);
-        console.log("Highest Bid:", listingData.highestBid);
-
-        //Confirm buyer doesn't get nft yet
-        assertEq(navisNFT.balanceOf(user2, newTokenID), 0, "User2 should not own the NFT");
-        assertEq(navisNFT.balanceOf(user3, newTokenID), 0, "User3 should not own the NFT");
-        //Confirm user still owns nft
-        assertEq(navisNFT.balanceOf(user, newTokenID), 1, "User should still own the NFT");
+        placeBid(user2, newTokenID, 350 ether);
+        placeBid(user3, newTokenID, 400 ether);
 
         // Concluding Auction
-        skip(auctionDuration + 1 hours);
+        skip(1 days + 1 hours);
         vm.startPrank(user);
         vm.expectEmit(true, false, false, false);
-        emit Sale(newTokenID, price, user, user3);
+        emit Sale(newTokenID, 400 ether, user, user3);
         navisMarketplace.concludeAuction(newTokenID);
         vm.stopPrank();
 
-        //Confirm highest bidder get nft
+        // Confirm highest bidder gets NFT
         assertEq(navisNFT.balanceOf(user3, newTokenID), 1, "User3 should win the auction");
-        //Confirm user no longer owns nft
-        assertEq(navisNFT.balanceOf(user, newTokenID), 0, "User no longer own nft");
-        assertEq(navisNFT.balanceOf(user2, newTokenID), 0, "User no longer own nft");
+        assertEq(navisNFT.balanceOf(user, newTokenID), 0, "User should no longer own the NFT");
     }
 
-    function testunlistToken() public {
-        uint256 shipType = 8;
-        uint256 mintPrice = 100 ether;
+    function testUnlistToken() public {
+        uint256 newTokenID = mintAndListToken(user, 8, 300 ether, true, uint64(block.timestamp) + 1 days);
 
         vm.startPrank(user);
-        require(navixToken.approve(address(navisNFT), mintPrice), "Approval failed");
-        uint256 newTokenID = navisNFT.mintPremium(shipType);
-        console.log("New Token ID is:", newTokenID);
-
-        uint256 price = 300 ether;
-        bool isAuction = true;
-        uint64 auctionDuration = uint64(block.timestamp) + 1 days;
-
-        navisNFT.setApprovalForAll(address(navisMarketplace), true);
-        vm.expectEmit(true, false, false, false);
-        emit Listed(newTokenID, price, user);
-        navisMarketplace.listToken(newTokenID, price, isAuction, auctionDuration);
-
-        //Unlisting
         navisMarketplace.unlistToken(newTokenID);
+        vm.stopPrank();
 
         NavisMarketplace.Listing memory listingData = navisMarketplace.getListingData(newTokenID);
-
-        assert(
-            listingData.tokenId == 0 && listingData.price == 0 && listingData.seller == address(0)
-                && listingData.isAuction == false && listingData.auctionEndTime == 0
-                && listingData.highestBidder == address(0) && listingData.highestBid == 0
-        );
-
-        vm.stopPrank();
+        assertEq(listingData.tokenId, 0);
+        assertEq(listingData.price, 0);
+        assertEq(listingData.seller, address(0));
     }
 
     function testPauseAndUnpauseListing() public {
-        uint256 shipType = 8;
-        uint256 mintPrice = 100 ether;
+        uint256 newTokenID = mintAndListToken(user, 8, 300 ether, true, uint64(block.timestamp) + 1 days);
 
-        vm.startPrank(user);
-        require(navixToken.approve(address(navisNFT), mintPrice), "Approval failed");
-        uint256 newTokenID = navisNFT.mintPremium(shipType);
-        console.log("New Token ID is:", newTokenID);
-
-        uint256 price = 300 ether;
-        bool isAuction = true;
-        uint64 auctionDuration = uint64(block.timestamp) + 1 days;
-
-        navisNFT.setApprovalForAll(address(navisMarketplace), true);
-        vm.expectEmit(true, false, false, false);
-        emit Listed(newTokenID, price, user);
-        navisMarketplace.listToken(newTokenID, price, isAuction, auctionDuration);
-
-        //Pausing listing by user
+        // Pausing listing by user
         vm.startPrank(user);
         navisMarketplace.pauseListing(newTokenID);
         vm.stopPrank();
 
-        //Attempting to bid should revert
+        // Attempting to bid should revert
         vm.startPrank(user2);
         vm.expectRevert(bytes("Listing currently paused"));
-        navisMarketplace.placeBid(newTokenID, price + 2 ether);
+        navisMarketplace.placeBid(newTokenID, 302 ether);
         vm.stopPrank();
 
-        //Unpausing listing by user
+        // Unpausing listing by user
         vm.startPrank(user);
         navisMarketplace.unpauseListing(newTokenID);
         vm.stopPrank();
 
-        //Attempting to bid should not revert
-        vm.startPrank(user2);
-        require(navixToken.approve(address(navisMarketplace), price + 2 ether), "Approval failed");
-        navisMarketplace.placeBid(newTokenID, price + 2 ether);
-        vm.stopPrank();
+        // Attempting to bid should not revert
+        placeBid(user2, newTokenID, 302 ether);
     }
 
-    function testupdateListing() public {
-        uint256 shipType = 8;
-        uint256 mintPrice = 100 ether;
+    function testUpdateListing() public {
+        uint256 newTokenID = mintAndListToken(user, 8, 300 ether, true, uint64(block.timestamp) + 1 days);
 
         vm.startPrank(user);
-        require(navixToken.approve(address(navisNFT), mintPrice), "Approval failed");
-        uint256 newTokenID = navisNFT.mintPremium(shipType);
-        console.log("New Token ID is:", newTokenID);
-
-        uint256 price = 300 ether;
-        bool isAuction = true;
-        uint64 auctionDuration = uint64(block.timestamp) + 1 days;
-
-        navisNFT.setApprovalForAll(address(navisMarketplace), true);
-        vm.expectEmit(true, false, false, false);
-        emit Listed(newTokenID, price, user);
-        navisMarketplace.listToken(newTokenID, price, isAuction, auctionDuration);
-
-        NavisMarketplace.Listing memory listingData = navisMarketplace.getListingData(newTokenID);
-        // Log the details of the listing
-        assert(listingData.price == price);
-
-        navisMarketplace.updateListing(newTokenID, price + 10 ether);
-        NavisMarketplace.Listing memory listingDataUpdate = navisMarketplace.getListingData(newTokenID);
+        navisMarketplace.updateListing(newTokenID, 310 ether);
         vm.stopPrank();
 
-        assert(listingDataUpdate.price == price + 10 ether);
+        NavisMarketplace.Listing memory listingDataUpdate = navisMarketplace.getListingData(newTokenID);
+        assertEq(listingDataUpdate.price, 310 ether);
+    }
+
+    function mintAndListToken(
+        address userAddress,
+        uint256 shipType,
+        uint256 price,
+        bool isAuction,
+        uint64 auctionDuration
+    ) internal returns (uint256) {
+        vm.startPrank(userAddress);
+        require(navixToken.approve(address(navisNFT), mintPrice), "Approval failed");
+        uint256 newTokenID = navisNFT.mintPremium(shipType);
+        navisNFT.setApprovalForAll(address(navisMarketplace), true);
+        navisMarketplace.listToken(newTokenID, price, isAuction, auctionDuration);
+        vm.stopPrank();
+        return newTokenID;
+    }
+
+    function placeBid(address bidder, uint256 tokenId, uint256 bidAmount) internal {
+        vm.startPrank(bidder);
+        require(navixToken.approve(address(navisMarketplace), bidAmount), "Approval failed");
+        navisMarketplace.placeBid(tokenId, bidAmount);
+        vm.stopPrank();
     }
 }
