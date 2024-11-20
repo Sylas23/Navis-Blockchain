@@ -122,6 +122,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
 
     function buyToken(uint256 tokenId) public whenNotPaused nonReentrant {
         Listing memory listing = listings[tokenId];
+        require(!blacklisted[msg.sender], "Buyer is blacklisted");
         require(listing.price > 0, "Token must be listed.");
         require(listing.isAuction == false, "Token currently on auction");
 

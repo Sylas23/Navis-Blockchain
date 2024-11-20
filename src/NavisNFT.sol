@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Compatible with OpenZeppelin Contracts ^5.0.0
-pragma solidity ^0.8.20;
+pragma solidity 0.8.23;
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
@@ -10,7 +10,13 @@ import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, ERC1155Supply {
+contract NavisNFT is
+    ERC1155,
+    AccessControl,
+    ERC1155Pausable,
+    ERC1155Burnable,
+    ERC1155Supply
+{
     using Counters for Counters.Counter;
 
     Counters.Counter public _tokenIdTracker;
@@ -47,6 +53,7 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
 
     // Mapping from ship type code to URI
     mapping(uint256 => string) public shipTypeURIs;
+    string private _baseURI; // State variable to hold the base URI
 
     constructor(address _navisTokenAddress) ERC1155("") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -56,6 +63,7 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
         navisToken = IERC20(_navisTokenAddress);
         name = "Navis NFT Ship";
         symbol = "NavisShip";
+        _baseURI = "https://gnfd-testnet-sp1.bnbchain.org/view/navis-nft-test/"; // Default base URI
 
         // Initialize URIs for each ship type, assuming 75 types
         // for (uint256 i = 1; i <= 75; i++) {
@@ -63,6 +71,12 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
         //         abi.encodePacked("https://gnfd-testnet-sp1.bnbchain.org/view/navis-nft-test/", uint2str(i), ".json")
         //     );
         // }
+    }
+
+    function setBaseURI(
+        string memory newBaseURI
+    ) public onlyRole(URI_SETTER_ROLE) {
+        _baseURI = newBaseURI;
     }
 
     function setURI(string memory newuri) public onlyRole(URI_SETTER_ROLE) {
@@ -77,13 +91,18 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
         _unpause();
     }
 
-    function setFeeCollector(address _feeCollector) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setFeeCollector(
+        address _feeCollector
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
         feeCollector = _feeCollector;
     }
 
     // This is not gas efficient. How to make it gas efficient?
     // Function to update ship abilities
-    function updateShipAbilities(uint256 _id, string[] memory _abilities) public onlyRole(MINTER_ROLE) {
+    function updateShipAbilities(
+        uint256 _id,
+        string[] memory _abilities
+    ) public onlyRole(MINTER_ROLE) {
         if (shipAbilities[_id].length == 0) {
             shipAbilities[_id] = _abilities;
         } else {
@@ -92,17 +111,19 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
     }
 
     function uri(uint256 tokenId) public view override returns (string memory) {
-        uint256 shipType = tokenId < PREMIUM_ID_OFFSET ? tokenId : premiumShipIDToType[tokenId];
-        return string(
-            abi.encodePacked("https://gnfd-testnet-sp1.bnbchain.org/view/navis-nft-test/", uint2str(shipType), ".json")
-        );
+        uint256 shipType = tokenId < PREMIUM_ID_OFFSET
+            ? tokenId
+            : premiumShipIDToType[tokenId];
+        return string(abi.encodePacked(_baseURI, uint2str(shipType), ".json"));
     }
 
-    function setMintFee( uint256 _MintFee) public { 
+    function setMintFee(uint256 _MintFee) public {
         mintFee = _MintFee;
     }
 
-    function getPremiumShipAbilities(uint256 _id) public view returns (string[] memory) {
+    function getPremiumShipAbilities(
+        uint256 _id
+    ) public view returns (string[] memory) {
         return shipAbilities[_id];
     }
 
@@ -119,7 +140,10 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
 
     //@notice This mints non-fungible tokens
     function mintPremium(uint256 shipType) public returns (uint256) {
-        require(navisToken.transferFrom(msg.sender, feeCollector, mintFee), "Fee transfer failed");
+        require(
+            navisToken.transferFrom(msg.sender, feeCollector, mintFee),
+            "Fee transfer failed"
+        );
         require(shipType > 5 && shipType <= 75, "Invalid ship type");
         uint256 newTokenId = _tokenIdTracker.current() + PREMIUM_ID_OFFSET;
         _mint(msg.sender, newTokenId, 1, "");
@@ -131,17 +155,24 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
         return newTokenId;
     }
 
-    function getUserShipIDs(address _user) public view returns (uint256[] memory) {
+    function getUserShipIDs(
+        address _user
+    ) public view returns (uint256[] memory) {
         return userToNFT[_user];
     }
 
-    function setShipTypeURI(uint256 shipType, string memory uri) public onlyRole(URI_SETTER_ROLE) {
+    function setShipTypeURI(
+        uint256 shipType,
+        string memory theUri
+    ) public onlyRole(URI_SETTER_ROLE) {
         require(shipType > 0 && shipType <= 50, "Invalid ship type");
-        shipTypeURIs[shipType] = uri;
+        shipTypeURIs[shipType] = theUri;
     }
 
     // Helper function to convert uint256 to string
-    function uint2str(uint256 _i) internal pure returns (string memory _uintAsString) {
+    function uint2str(
+        uint256 _i
+    ) internal pure returns (string memory _uintAsString) {
         if (_i == 0) {
             return "0";
         }
@@ -155,7 +186,7 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
         uint256 k = len;
         while (_i != 0) {
             k = k - 1;
-            uint8 temp = (48 + uint8(_i - _i / 10 * 10));
+            uint8 temp = (48 + uint8(_i - (_i / 10) * 10));
             bytes1 b1 = bytes1(temp);
             bstr[k] = b1;
             _i /= 10;
@@ -165,14 +196,18 @@ contract NavisNFT is ERC1155, AccessControl, ERC1155Pausable, ERC1155Burnable, E
 
     // The following functions are overrides required by Solidity.
 
-    function _update(address from, address to, uint256[] memory ids, uint256[] memory values)
-        internal
-        override(ERC1155, ERC1155Pausable, ERC1155Supply)
-    {
+    function _update(
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory values
+    ) internal override(ERC1155, ERC1155Pausable, ERC1155Supply) {
         super._update(from, to, ids, values);
     }
 
-    function supportsInterface(bytes4 interfaceId) public view override(ERC1155, AccessControl) returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view override(ERC1155, AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 }
