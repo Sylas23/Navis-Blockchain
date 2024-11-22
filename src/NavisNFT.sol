@@ -80,7 +80,7 @@ contract NavisNFT is
     }
 
     function setURI(string memory newuri) public onlyRole(URI_SETTER_ROLE) {
-        _setURI(newuri);
+        _baseURI = newuri;
     }
 
     function pause() public onlyRole(PAUSER_ROLE) {

@@ -100,9 +100,9 @@ contract NavisNFTTest is Test {
         vm.prank(user);
         navisNFT.mintPremium(5);
 
-        // vm.expectRevert("Invalid ship type");
-        // vm.prank(user);
-        // navisNFT.mintPremium(76);
+        vm.expectRevert("Invalid ship type");
+        vm.prank(user);
+        navisNFT.mintPremium(76);
     }
 
     function testPauseUnpause() public {
@@ -148,21 +148,19 @@ contract NavisNFTTest is Test {
         navisNFT.updateShipAbilities(1, abilities);
     }
 
-    // @todo: Fix this test FAILING because of override function in main contract
+    function testSetURI() public {
+        string memory newURI = "https://example.com/nft-metadata/";
 
-    // function testSetURI() public {
-    //     string memory newURI = "https://example.com/nft-metadata/";
+        // Set URI
+        vm.prank(uriSetter);
+        navisNFT.setURI(newURI);
 
-    //     // Set URI
-    //     vm.prank(uriSetter);
-    //     navisNFT.setURI(newURI);
-
-    //     // Check URI
-    //     assertEq(
-    //         navisNFT.uri(1),
-    //         string(abi.encodePacked(newURI, "1.json"))
-    //     );
-    // }
+        // Check URI
+        assertEq(
+            navisNFT.uri(1),
+            string(abi.encodePacked(newURI, "1.json"))
+        );
+    }
 
     function testMintFeeUpdate() public {
         uint256 newFee = 50e18;
