@@ -38,7 +38,7 @@ contract NavisNFTTest is Test {
         navisNFT.setFeeCollector(feeCollector);
     }
 
-    function testInitialSetup() public {
+    function testInitialSetup() public view {
         assertEq(navisNFT.name(), "Navis NFT Ship");
         assertEq(navisNFT.symbol(), "NavisShip");
         assertEq(navisNFT.getUserShipIDs(user).length, 0);
@@ -128,7 +128,6 @@ contract NavisNFTTest is Test {
     }
 
     function testUpdateShipAbilities() public {
-        string;
         string[] memory abilities = new string[](2);
         abilities[0] = "Speed Boost";
         abilities[1] = "Extra Shield";
@@ -149,7 +148,7 @@ contract NavisNFTTest is Test {
         navisNFT.updateShipAbilities(1, abilities);
     }
 
-    // @todo: Fix this test FAILING because of override function
+    // @todo: Fix this test FAILING because of override function in main contract
 
     // function testSetURI() public {
     //     string memory newURI = "https://example.com/nft-metadata/";

@@ -31,7 +31,7 @@ contract NavixTokenTest is Test {
         navixToken.grantRole(navixToken.RESCUER_ROLE(), rescuer);
     }
 
-    function testInitialSetup() public {
+    function testInitialSetup() public view {
         assertEq(navixToken.name(), "Navix");
         assertEq(navixToken.symbol(), "Navix");
         assertEq(navixToken.totalSupply(), 0);
