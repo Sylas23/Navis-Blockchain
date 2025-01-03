@@ -30,7 +30,6 @@ contract NavisNFT is
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     string public name;
     string public symbol;
-    //mapping (address => )
     mapping(address => bool) userHasMinted;
 
     // Mapping from ship ID to ship abilities
