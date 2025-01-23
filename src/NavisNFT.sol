@@ -10,6 +10,9 @@ import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
+//@audit Incorrect logic around the NFT URI (Fixed)
+//@audit The userToNFT mapping in NavisNFT is not updated on transfers (Fixed)
+
 contract NavisNFT is
     ERC1155,
     AccessControl,
@@ -52,7 +55,7 @@ contract NavisNFT is
 
     // Mapping from ship type code to URI
     mapping(uint256 => string) public shipTypeURIs;
-    string private _baseURI; // State variable to hold the base URI
+    string private _baseURI; 
 
     constructor(address _navisTokenAddress) ERC1155("") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -133,7 +136,6 @@ contract NavisNFT is
         for (uint256 i = 0; i < 6; i++) {
             _mint(msg.sender, i, 1, "");
             userToNFT[msg.sender].push(i);
-            _setURI(shipTypeURIs[i]);
         }
     }
 
@@ -148,7 +150,6 @@ contract NavisNFT is
         _mint(msg.sender, newTokenId, 1, "");
         userToNFT[msg.sender].push(newTokenId);
         premiumShipIDToType[newTokenId] = shipType;
-        _setURI(shipTypeURIs[shipType]);
         _tokenIdTracker.increment();
 
         return newTokenId;
@@ -167,6 +168,7 @@ contract NavisNFT is
         require(shipType > 0 && shipType <= 50, "Invalid ship type");
         shipTypeURIs[shipType] = theUri;
     }
+
 
     // Helper function to convert uint256 to string
     function uint2str(
@@ -193,15 +195,55 @@ contract NavisNFT is
         return string(bstr);
     }
 
-    // The following functions are overrides required by Solidity.
-
     function _update(
         address from,
         address to,
         uint256[] memory ids,
-        uint256[] memory values
+        uint256[] memory amounts
     ) internal override(ERC1155, ERC1155Pausable, ERC1155Supply) {
-        super._update(from, to, ids, values);
+        super._update(from, to, ids, amounts);
+
+        // Enforce soul-bound restriction for free NFTs
+        if (from != address(0) && to != address(0)) {
+            // Ignore minting and burning
+            for (uint256 i = 0; i < ids.length; i++) {
+                require(
+                    ids[i] >= PREMIUM_ID_OFFSET,
+                    "Free NFTs are soul-bound"
+                );
+            }
+        }
+
+        //@audit The userToNFT mapping in NavisNFT is not updated on transfers
+        //Updates userToNFT mapping only if the transfer or burn is successful and not minting and the token is not a free NFT
+        if (from != address(0) && to != address(0)) {
+            for (uint256 i = 0; i < ids.length; i++) {
+            if (ids[i] >= PREMIUM_ID_OFFSET) {
+                _removeFromUserNFTMapping(from, ids[i]);
+                userToNFT[to].push(ids[i]);
+            }
+            }
+        }
+
+        // Handle burning of NFTs
+        if (to == address(0)) {
+            for (uint256 i = 0; i < ids.length; i++) {
+            require(ids[i] >= PREMIUM_ID_OFFSET, "Free NFTs cannot be burned");
+            _removeFromUserNFTMapping(from, ids[i]);
+            }
+        }
+    }
+
+    // Helper function to remove token ID from `userToNFT` mapping
+    function _removeFromUserNFTMapping(address user, uint256 tokenId) internal {
+        uint256[] storage tokens = userToNFT[user];
+        for (uint256 i = 0; i < tokens.length; i++) {
+            if (tokens[i] == tokenId) {
+                tokens[i] = tokens[tokens.length - 1];
+                tokens.pop();
+                break;
+            }
+        }
     }
 
     function supportsInterface(

@@ -8,7 +8,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
-//TODO: Implement protocol fee feature. VITAL
+
+//@audit  Highest Bidder is not refunded when unlisted a token (Fixed)
+//@audit Owner can frontrun and increase listing price before users buy token (Fixed)
+//@audit Missing check for blacklisted users on listToken function (Fixed)
+//@audit Allow the highest bidder to conclude the auction as well (Fixed)
 
 contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
     IERC1155 public immutable nftContract;
@@ -37,6 +41,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
     mapping(uint256 => bool) public listingPaused;
     mapping(address => bool) public blacklisted;
     uint64 public constant MIN_EXTENSION_TIME = 2 minutes;
+    uint64 private delayPeriod = 1 hours; // 1 hour delay
     uint256 public minBidPercentageIncrement = 5; // 5% minimum increment
     uint256[] public activeTokenIds;
 
@@ -65,12 +70,13 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         navisToken = IERC20(_navisToken);
     }
 
+    //@audit Missing check for blacklisted users on listToken function
     function listToken(
         uint256 tokenId,
         uint256 price,
         bool isAuction,
         uint64 auctionDuration
-    ) public nonReentrant {
+    ) public isNotBlacklisted nonReentrant {
         require(
             nftContract.balanceOf(msg.sender, tokenId) > 0,
             "Seller must own the token."
@@ -149,14 +155,27 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         updateHistory(tokenId, listing.seller, msg.sender, listing.price);
     }
 
+    //@audit - refund the highest bidder if the token is unlisted
     function unlistToken(uint256 tokenId) public nonReentrant {
         require(
             listings[tokenId].seller == msg.sender,
             "Only seller can unlist the token."
         );
-        emit Unlisted(tokenId);
+
+        //@implement - refund the highest bidder if the token is unlisted
+        if (listings[tokenId].highestBidder != address(0)) {
+            require(
+                navisToken.transfer(
+                    listings[tokenId].highestBidder,
+                    listings[tokenId].highestBid
+                ),
+                "Failed to refund the highest bidder"
+            );
+        }
+
         removeTokenId(tokenId); // Implement this to remove token ID from activeTokenIds
         delete listings[tokenId];
+        emit Unlisted(tokenId);
     }
 
     function getListingData(
@@ -295,6 +314,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
     //     minBidPercentageIncrement = _minBidPercentageIncrement;
     // }
 
+    //@audit Allow the highest bidder to conclude the auction as well
     function concludeAuction(uint256 tokenId) public nonReentrant {
         Listing storage listing = listings[tokenId];
         require(listing.isAuction, "This token is not auctioned.");
@@ -303,8 +323,10 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
             "The auction is not yet over."
         );
         require(
-            msg.sender == listing.seller || msg.sender == owner(),
-            "Only seller or owner can conclude the auction."
+            msg.sender == listing.seller ||
+                msg.sender == owner() ||
+                msg.sender == listing.highestBidder,
+            "Only seller, owner, or highest bidder can conclude the auction."
         );
 
         if (listing.highestBidder != address(0)) {
@@ -357,6 +379,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         listingPaused[tokenId] = false;
     }
 
+    //@audit Owner can frontrun and increase listing price before users buy token
     function updateListing(uint256 tokenId, uint256 newPrice) public {
         require(newPrice > 0, "Price must be greater than zero.");
         require(listingPaused[tokenId] == false, "Listing currently paused");
@@ -365,8 +388,25 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
             listings[tokenId].seller == msg.sender,
             "Only seller can update the listing."
         );
+
+        //@Implement a delay logic for price updates
+        uint256 lastUpdated = listings[tokenId].auctionEndTime;
+        require(
+            block.timestamp >= lastUpdated + delayPeriod,
+            "Price update is in delay period."
+        );
+
         listings[tokenId].price = newPrice;
+        listings[tokenId].auctionEndTime = uint64(block.timestamp); // Update the last updated time
         emit PriceUpdated(tokenId, newPrice);
+    }
+
+    function setDelayPeriod(uint64 _delayPeriod) public onlyOwner {
+        delayPeriod = _delayPeriod;
+    }
+
+    function getDelayPeriod() public view returns (uint64) {
+        return delayPeriod;
     }
 
     function rescueERC20(

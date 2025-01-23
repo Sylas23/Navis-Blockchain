@@ -2,9 +2,13 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
+import {console} from "forge-std/console.sol";
+
 import "../src/NavisMarketplace.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+//import console
 
 contract MockNFT is ERC1155 {
     constructor() ERC1155("") {}
@@ -146,7 +150,6 @@ contract NavisMarketplaceTest is Test {
     }
 
     function testBlacklistUser() public {
-
         vm.prank(seller);
         marketplace.listToken(1, 10 ether, false, 0);
 
@@ -179,4 +182,139 @@ contract NavisMarketplaceTest is Test {
 
         assertEq(nft.balanceOf(owner, 1), 1);
     }
+
+    //test getListingData
+    function testGetListingData() public {
+        vm.prank(seller);
+        marketplace.listToken(1, 10 ether, false, 0);
+
+        NavisMarketplace.Listing memory listing = marketplace.getListingData(1);
+        assertEq(listing.tokenId, 1);
+        assertEq(listing.price, 10 ether);
+        assertEq(listing.seller, seller);
+        assertEq(listing.isAuction, false);
+    }
+
+    //test getListingData after bid has been placed
+    function testGetListingDataWithBid() public {
+        vm.prank(seller);
+        marketplace.listToken(1, 10 ether, true, 1 days);
+
+        vm.prank(bidder);
+        marketplace.placeBid(1, 11 ether);
+
+        NavisMarketplace.Listing memory listing = marketplace.getListingData(1);
+        assertEq(listing.tokenId, 1);
+        assertEq(listing.price, 10 ether);
+        assertEq(listing.seller, seller);
+        assertEq(listing.isAuction, true);
+        assertEq(listing.highestBid, 11 ether);
+        assertEq(listing.highestBidder, bidder);
+    }
+
+    //test refund highest bidder if token is unlisted
+    function testRefundHighestBidder() public {
+        vm.prank(seller);
+        marketplace.listToken(1, 10 ether, true, 1 days);
+
+        vm.prank(bidder);
+        marketplace.placeBid(1, 10 ether);
+        //asser the highest bidder is bidder
+        NavisMarketplace.Listing memory listing1 = marketplace.getListingData(
+            1
+        );
+        assertEq(listing1.highestBidder, bidder);
+        assertEq(listing1.highestBid, 10 ether);
+
+        vm.prank(seller);
+        marketplace.unlistToken(1);
+
+        //assert token is unlisted
+        NavisMarketplace.Listing memory listing2 = marketplace.getListingData(
+            1
+        );
+        assertEq(listing2.tokenId, 0);
+
+        assertEq(navisToken.balanceOf(bidder), 100 ether);
+    }
+
+    //test cannot update listing within delayperiod
+    function testCannotUpdateListingWithinDelayPeriod() public {
+        vm.prank(seller);
+        marketplace.listToken(1, 10 ether, false, 0);
+
+        uint256 currentTime = block.timestamp;
+
+        // Calculate the timestamp one hour ahead
+        uint256 futureTime = currentTime + 3500; // 3500 seconds = less than 1 hour
+
+        // Warp time forward by 1 hour
+        vm.warp(futureTime);
+
+        vm.expectRevert("Price update is in delay period.");
+        vm.prank(seller);
+        marketplace.updateListing(1, 23 ether);
+    }
+
+    //test blacklist user cannot list token
+    function testBlacklistUserCannotListToken() public {
+        vm.prank(owner);
+        marketplace.blacklistUser(buyer);
+
+        vm.expectRevert("Caller is blacklisted");
+        vm.prank(buyer);
+        marketplace.listToken(1, 10 ether, false, 0);
+    }
+
+        //test blacklist user cannot batch list token
+    function testBlacklistUserCannotBatchListToken() public {
+        vm.prank(owner);
+        marketplace.blacklistUser(buyer);
+
+        vm.expectRevert("Caller is blacklisted");
+        vm.prank(buyer);
+        uint256[] memory tokenIds = new uint256[](2);
+        tokenIds[0] = 1;
+        tokenIds[1] = 2;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 10 ether;
+        prices[1] = 20 ether;
+
+        bool[] memory isAuctions = new bool[](2);
+        isAuctions[0] = false;
+        isAuctions[1] = false;
+
+        uint64[] memory durations = new uint64[](2);
+        durations[0] = 0;
+        durations[1] = 0;
+
+        marketplace.batchListTokens(tokenIds, prices, isAuctions, durations);
+    }
+
+    // test "Only seller, owner, or highest bidder can conclude the auction."
+    function testOnlySellerOwnerHighestBidderCanConcludeAuction() public {
+        vm.prank(seller);
+        marketplace.listToken(1, 10 ether, true, 1 days);
+
+        vm.prank(bidder);
+        marketplace.placeBid(1, 11 ether);
+
+        uint256 currentTime = block.timestamp;
+
+        // Calculate the timestamp one hour ahead
+        uint256 futureTime = currentTime + 1 days; //
+
+        // Warp time forward by 1 hour
+        vm.warp(futureTime);
+
+        vm.prank(bidder);
+        marketplace.concludeAuction(1);
+
+        //confirm user gets nft
+        assertEq(nft.balanceOf(bidder, 1), 1);
+    }
+
+
+
 }

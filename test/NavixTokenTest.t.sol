@@ -114,6 +114,7 @@ contract NavixTokenTest is Test {
         // Verify balances
         assertEq(mockToken.balanceOf(rescuer), rescuerInitialBalance + rescueAmount);
     }
+
 }
 
 contract ERC20Mock is ERC20 {

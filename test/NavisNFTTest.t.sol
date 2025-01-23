@@ -156,10 +156,7 @@ contract NavisNFTTest is Test {
         navisNFT.setURI(newURI);
 
         // Check URI
-        assertEq(
-            navisNFT.uri(1),
-            string(abi.encodePacked(newURI, "1.json"))
-        );
+        assertEq(navisNFT.uri(1), string(abi.encodePacked(newURI, "1.json")));
     }
 
     function testMintFeeUpdate() public {
@@ -204,6 +201,96 @@ contract NavisNFTTest is Test {
         uint256[] memory userShips = navisNFT.getUserShipIDs(user);
         assertEq(userShips.length, 6);
     }
+
+    // Test userToNFT is updated on every transfer
+
+    function testUserToNFTisUpdatedOnEveryTransfer() public {
+        uint256 mintFee = 20e18;
+        uint256 userBag = 2000e18;
+
+        // Transfer tokens to user and approve NavisNFT
+        mockToken.transfer(user, userBag);
+        vm.prank(user);
+        mockToken.approve(address(navisNFT), userBag);
+
+        // Mint a premium ship
+        vm.prank(user);
+        uint256 tokenId = navisNFT.mintPremium(10);
+
+        uint256[] memory userShips = navisNFT.getUserShipIDs(user);
+
+        assertEq(userShips.length, 1); //passed
+        assertEq(userShips[0], tokenId); // passed
+
+        // Transfer the premium ship to another user
+        address newUser = address(0x6);
+        vm.prank(user);
+        navisNFT.safeTransferFrom(user, newUser, tokenId, 1, "");
+
+        // Check that the ship ID is removed from the original user
+        // userShips = navisNFT.getUserShipIDs(user);
+        uint256[] memory updateUserShips = navisNFT.getUserShipIDs(user);
+        assertEq(updateUserShips.length, 0);
+
+        // Check that the ship ID is added to the new user
+        uint256[] memory newUserShips = navisNFT.getUserShipIDs(newUser);
+        assertEq(newUserShips.length, 1);
+        assertEq(newUserShips[0], tokenId);
+    }
+
+    //testCannotTransferFreeNFT
+    function testCannotTransferFreeNFT() public {
+        vm.prank(user);
+        navisNFT.mintFree();
+
+        // Attempt to transfer a free NFT
+        address newUser = address(0x6);
+        vm.prank(user);
+        vm.expectRevert("Free NFTs are soul-bound");
+        navisNFT.safeTransferFrom(user, newUser, 0, 1, "");
+
+        // Ensure the original user still owns the NFT
+        uint256[] memory userShips = navisNFT.getUserShipIDs(user);
+        assertEq(userShips.length, 6);
+        assertEq(userShips[0], 0);
+    }
+
+    //test cannot burn free NFT
+    function testCannotBurnFreeNFT() public {
+        vm.prank(user);
+        navisNFT.mintFree();
+
+        // Attempt to burn a free NFT
+        vm.prank(user);
+        vm.expectRevert("Free NFTs cannot be burned");
+        navisNFT.burn(user, 0, 1);
+
+        // Ensure the original user still owns the NFT
+        uint256[] memory userShips = navisNFT.getUserShipIDs(user);
+        assertEq(userShips.length, 6);
+        assertEq(userShips[0], 0);
+    }
+
+    //test can burn premium NFT
+    function testCanBurnPremiumNFT() public {
+        uint256 mintFee = 20e18;
+        uint256 userBag = 2000e18;
+
+        mockToken.transfer(user, userBag);
+        vm.prank(user);
+        mockToken.approve(address(navisNFT), userBag);
+
+        vm.prank(user);
+        uint256 tokenId = navisNFT.mintPremium(10);
+
+        vm.prank(user);
+        navisNFT.burn(user, tokenId, 1);
+
+        uint256[] memory userShips = navisNFT.getUserShipIDs(user);
+        assertEq(userShips.length, 0);
+    }
+
+
 }
 
 contract ERC20Mock is ERC20 {
