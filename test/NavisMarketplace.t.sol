@@ -266,7 +266,7 @@ contract NavisMarketplaceTest is Test {
         marketplace.listToken(1, 10 ether, false, 0);
     }
 
-        //test blacklist user cannot batch list token
+    //test blacklist user cannot batch list token
     function testBlacklistUserCannotBatchListToken() public {
         vm.prank(owner);
         marketplace.blacklistUser(buyer);
@@ -302,7 +302,6 @@ contract NavisMarketplaceTest is Test {
 
         uint256 currentTime = block.timestamp;
 
-        // Calculate the timestamp one hour ahead
         uint256 futureTime = currentTime + 1 days; //
 
         // Warp time forward by 1 hour
@@ -315,6 +314,48 @@ contract NavisMarketplaceTest is Test {
         assertEq(nft.balanceOf(bidder, 1), 1);
     }
 
+    /**
+     * @notice Test to ensure that the seller cannot front-run the buyer by updating the listing price before the buyer buys the token.
+     */
+    function testSellerCannotFrontRunBuyerByUpdatingListing() public {
+        uint256 PRICE_A = 10 ether;
+        uint256 PRICE_B = 20 ether;
 
+        vm.prank(seller);
+        marketplace.listToken(1, PRICE_A, false, 0);
 
+        NavisMarketplace.Listing memory listing = marketplace.getListingData(1);
+        assertEq(listing.price, PRICE_A);
+        assertEq(listing.seller, seller);
+        assertEq(listing.isAuction, false);
+
+        vm.prank(seller);
+        vm.expectRevert("Price update is in delay period.");
+        marketplace.updateListing(1, PRICE_B);
+
+        uint64 delay = marketplace.getDelayPeriod();
+        vm.warp(block.timestamp + delay + 1);
+
+        vm.prank(seller);
+        marketplace.updateListing(1, PRICE_B);
+
+        NavisMarketplace.Listing memory updatedListing = marketplace
+            .getListingData(1);
+        assertEq(updatedListing.price, PRICE_B);
+
+        vm.prank(buyer);
+        marketplace.buyToken(1);
+
+        assertEq(nft.balanceOf(buyer, 1), 1);
+        assertEq(nft.balanceOf(seller, 1), 0);
+        uint256 expectedSellerBalance = PRICE_B;
+        assertEq(
+            navisToken.balanceOf(seller),
+            100 ether + expectedSellerBalance
+        );
+
+        NavisMarketplace.Listing memory finalListing = marketplace
+            .getListingData(1);
+        assertEq(finalListing.tokenId, 0); 
+    }
 }

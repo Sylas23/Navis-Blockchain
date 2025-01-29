@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
-
 //@audit  Highest Bidder is not refunded when unlisted a token (Fixed)
 //@audit Owner can frontrun and increase listing price before users buy token (Fixed)
 //@audit Missing check for blacklisted users on listToken function (Fixed)
@@ -27,6 +26,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         uint64 auctionEndTime;
         address highestBidder;
         uint256 highestBid;
+        uint64 lastPriceUpdate; // stores the last price update time
     }
 
     struct HistoryEntry {
@@ -99,8 +99,10 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
                 ? uint64(block.timestamp) + auctionDuration
                 : 0,
             highestBidder: address(0),
-            highestBid: 0
+            highestBid: 0,
+            lastPriceUpdate: uint64(block.timestamp) // Initialize here
         });
+
         activeTokenIds.push(tokenId);
         emit Listed(tokenId, price, msg.sender);
     }
@@ -384,20 +386,20 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         require(newPrice > 0, "Price must be greater than zero.");
         require(listingPaused[tokenId] == false, "Listing currently paused");
 
+        Listing storage listing = listings[tokenId];
         require(
             listings[tokenId].seller == msg.sender,
             "Only seller can update the listing."
         );
 
         //@Implement a delay logic for price updates
-        uint256 lastUpdated = listings[tokenId].auctionEndTime;
         require(
-            block.timestamp >= lastUpdated + delayPeriod,
+            block.timestamp >= listing.lastPriceUpdate + delayPeriod,
             "Price update is in delay period."
         );
 
         listings[tokenId].price = newPrice;
-        listings[tokenId].auctionEndTime = uint64(block.timestamp); // Update the last updated time
+        listing.lastPriceUpdate = uint64(block.timestamp);
         emit PriceUpdated(tokenId, newPrice);
     }
 
