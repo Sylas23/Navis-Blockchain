@@ -8,8 +8,6 @@ import "../src/NavisMarketplace.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-//import console
-
 contract MockNFT is ERC1155 {
     constructor() ERC1155("") {}
 
@@ -39,11 +37,9 @@ contract NavisMarketplaceTest is Test {
     address bidder = address(4);
 
     function setUp() public {
-        // Deploy mock contracts
         nft = new MockNFT();
         navisToken = new MockToken();
 
-        // Deploy marketplace and set roles
         vm.prank(owner);
         marketplace = new NavisMarketplace(address(nft), address(navisToken));
 
@@ -105,17 +101,34 @@ contract NavisMarketplaceTest is Test {
         vm.prank(seller);
         marketplace.listToken(1, 10 ether, true, 1 days);
 
-        vm.prank(bidder);
-        marketplace.placeBid(1, 11 ether);
+        address[] memory bidders = new address[](5);
+        bidders[0] = address(5);
+        bidders[1] = address(6);
+        bidders[2] = address(7);
+        bidders[3] = address(8);
+        bidders[4] = address(9);
+
+        // Mint mock tokens to bidders and approve marketplace
+        for (uint256 i = 0; i < bidders.length; i++) {
+            navisToken.mint(bidders[i], 100 ether);
+            vm.prank(bidders[i]);
+            navisToken.approve(address(marketplace), type(uint256).max);
+        }
+
+        // Place bids
+        for (uint256 i = 0; i < bidders.length; i++) {
+            vm.prank(bidders[i]);
+            marketplace.placeBid(1, 11 ether + i * 1 ether);
+        }
 
         vm.warp(block.timestamp + 2 days);
 
         vm.prank(seller);
         marketplace.concludeAuction(1);
 
-        assertEq(nft.balanceOf(bidder, 1), 1);
-        assertEq(nft.balanceOf(seller, 1), 0);
-        assertEq(navisToken.balanceOf(seller), 111 ether);
+        assertEq(nft.balanceOf(bidders[4], 1), 1); // Highest bidder should have the NFT
+        assertEq(nft.balanceOf(seller, 1), 0); // Seller should no longer have the NFT
+        assertEq(navisToken.balanceOf(seller), 115 ether); // Seller should have received the highest bid amount
     }
 
     function testUnlistToken() public {
@@ -304,7 +317,6 @@ contract NavisMarketplaceTest is Test {
 
         uint256 futureTime = currentTime + 1 days; //
 
-        // Warp time forward by 1 hour
         vm.warp(futureTime);
 
         vm.prank(bidder);
@@ -356,6 +368,6 @@ contract NavisMarketplaceTest is Test {
 
         NavisMarketplace.Listing memory finalListing = marketplace
             .getListingData(1);
-        assertEq(finalListing.tokenId, 0); 
+        assertEq(finalListing.tokenId, 0);
     }
 }

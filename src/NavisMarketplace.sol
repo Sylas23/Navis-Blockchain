@@ -20,13 +20,14 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
 
     struct Listing {
         uint256 tokenId;
-        uint256 price;
+        uint256 price; // Current price
+        uint256 lastPrice; // Previous price (could be used for comparison)
         address seller;
         bool isAuction;
         uint64 auctionEndTime;
         address highestBidder;
         uint256 highestBid;
-        uint64 lastPriceUpdate; // stores the last price update time
+        uint64 lastPriceUpdate; // Timestamp of the last price update
     }
 
     struct HistoryEntry {
@@ -93,6 +94,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         listings[tokenId] = Listing({
             tokenId: tokenId,
             price: price,
+            lastPrice: price,
             seller: msg.sender,
             isAuction: isAuction,
             auctionEndTime: isAuction
@@ -100,7 +102,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
                 : 0,
             highestBidder: address(0),
             highestBid: 0,
-            lastPriceUpdate: uint64(block.timestamp) // Initialize here
+            lastPriceUpdate: uint64(block.timestamp)
         });
 
         activeTokenIds.push(tokenId);
@@ -175,7 +177,7 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
             );
         }
 
-        removeTokenId(tokenId); // Implement this to remove token ID from activeTokenIds
+        removeTokenId(tokenId);
         delete listings[tokenId];
         emit Unlisted(tokenId);
     }
@@ -310,11 +312,11 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
         );
     }
 
-    // Setter in case we do minimum bid increment %
-    // function setMinBidPercentageIncrement(uint256 _minBidPercentageIncrement) public onlyOwner {
-    //     require(_minBidPercentageIncrement > 0, "Increment must be positive.");
-    //     minBidPercentageIncrement = _minBidPercentageIncrement;
-    // }
+
+    function setMinBidPercentageIncrement(uint256 _minBidPercentageIncrement) public onlyOwner {
+        require(_minBidPercentageIncrement > 0, "Increment must be positive.");
+        minBidPercentageIncrement = _minBidPercentageIncrement;
+    }
 
     //@audit Allow the highest bidder to conclude the auction as well
     function concludeAuction(uint256 tokenId) public nonReentrant {
@@ -357,8 +359,6 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
                 listing.highestBidder,
                 listing.highestBid
             );
-        } else {
-            // case where there were no bids
         }
 
         removeTokenId(tokenId);
@@ -388,17 +388,17 @@ contract NavisMarketplace is ERC1155Holder, ReentrancyGuard, Ownable, Pausable {
 
         Listing storage listing = listings[tokenId];
         require(
-            listings[tokenId].seller == msg.sender,
+            listing.seller == msg.sender,
             "Only seller can update the listing."
         );
 
-        //@Implement a delay logic for price updates
         require(
             block.timestamp >= listing.lastPriceUpdate + delayPeriod,
             "Price update is in delay period."
         );
 
-        listings[tokenId].price = newPrice;
+        listing.lastPrice = listing.price;
+        listing.price = newPrice;
         listing.lastPriceUpdate = uint64(block.timestamp);
         emit PriceUpdated(tokenId, newPrice);
     }
